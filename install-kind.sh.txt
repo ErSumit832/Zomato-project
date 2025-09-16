@@ -1,0 +1,49 @@
+#!/bin/bash
+
+set -e
+
+echo "🔹 Updating system..."
+sudo apt update -y && sudo apt upgrade -y
+
+echo "🔹 Installing required packages..."
+sudo apt install -y ca-certificates curl gnupg apt-transport-https
+
+echo "🔹 Installing Docker..."
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update -y
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+echo "🔹 Enabling Docker without sudo..."
+sudo groupadd docker || true
+sudo usermod -aG docker $USER
+newgrp docker <<EONG
+
+echo "🔹 Installing kubectl..."
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+echo "🔹 Installing KIND..."
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
+chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+
+echo "🔹 Creating KIND cluster with 1 master and 2 workers..."
+cat <<EOF > kind-cluster.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+EOF
+
+kind create cluster --name devcluster --config kind-cluster.yaml
+
+echo "✅ KIND cluster created successfully!"
+echo "Run: kubectl get nodes"
+EONG
